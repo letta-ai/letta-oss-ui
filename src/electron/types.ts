@@ -1,58 +1,160 @@
 /**
- * Letta SDK message types for electron communication.
+ * The contract between the Electron main process and the renderer.
+ * Types only - the renderer imports this file with `import type`.
  */
 
-// Re-export SDK types
-export type {
-  SDKMessage,
-  SDKInitMessage,
-  SDKAssistantMessage,
-  SDKToolCallMessage,
-  SDKToolResultMessage,
-  SDKReasoningMessage,
-  SDKResultMessage,
-  CanUseToolResponse,
-} from "@letta-ai/letta-agent-sdk";
+import type { PermissionMode } from "@letta-ai/letta-agent-sdk";
 
-export type UserPromptMessage = {
-  type: "user_prompt";
-  prompt: string;
+export type { PermissionMode };
+
+/**
+ * Where agents live and where their tools run:
+ * - local:  agents stored on this machine, tools run on this machine
+ * - cloud:  agents stored in Letta Cloud, tools run on this machine
+ * - remote: a self-hosted Letta app server owns both
+ */
+export type BackendKind = "local" | "cloud" | "remote";
+
+export type AppSettings = {
+  backend: BackendKind;
+  serverUrl: string;
+  apiBaseUrl: string;
+  /** Secrets never leave the main process; the renderer only learns whether one is set. */
+  hasApiKey: boolean;
+  hasServerToken: boolean;
+  permissionMode: PermissionMode;
+  /** Agent selected for the current backend. */
+  agentId: string | null;
+  recentCwds: string[];
+  defaultCwd: string;
 };
 
-// Import for union type and local use
-import type { SDKMessage, CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
+export type SettingsUpdate = {
+  backend?: BackendKind;
+  serverUrl?: string;
+  apiBaseUrl?: string;
+  /** A string replaces the saved secret, null clears it, undefined keeps it. */
+  apiKey?: string | null;
+  serverToken?: string | null;
+  permissionMode?: PermissionMode;
+  agentId?: string | null;
+};
 
-export type StreamMessage = SDKMessage | UserPromptMessage;
+export type ConnectionState =
+  | { status: "connecting"; backend: BackendKind }
+  | { status: "ready"; backend: BackendKind; detail: string }
+  | { status: "error"; backend: BackendKind; error: string };
 
-export type SessionStatus = "idle" | "running" | "completed" | "error";
-
-export type SessionInfo = {
+export type AgentSummary = {
   id: string;
-  title: string;
-  status: SessionStatus;
-  lettaConversationId?: string;
-  cwd?: string;
-  createdAt: number;
-  updatedAt: number;
+  name: string;
+  description: string | null;
+  model: string | null;
 };
 
-// Server -> Client events
-export type ServerEvent =
-  | { type: "stream.message"; payload: { sessionId: string; message: StreamMessage } }
-  | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string } }
-  | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string } }
-  | { type: "session.list"; payload: { sessions: SessionInfo[] } }
-  | { type: "session.history"; payload: { sessionId: string; status: SessionStatus; messages: StreamMessage[] } }
-  | { type: "session.deleted"; payload: { sessionId: string } }
-  | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown } }
-  | { type: "runner.error"; payload: { sessionId?: string; message: string } };
+export type ModelOption = {
+  id: string;
+  handle: string;
+  label: string;
+};
 
-// Client -> Server events
-export type ClientEvent =
-  | { type: "session.start"; payload: { title: string; prompt: string; cwd?: string; allowedTools?: string } }
-  | { type: "session.continue"; payload: { sessionId: string; prompt: string; cwd?: string } }
-  | { type: "session.stop"; payload: { sessionId: string } }
-  | { type: "session.delete"; payload: { sessionId: string } }
-  | { type: "session.list" }
-  | { type: "session.history"; payload: { sessionId: string } }
-  | { type: "permission.response"; payload: { sessionId: string; toolUseId: string; result: CanUseToolResponse } };
+export type ConversationSummary = {
+  id: string;
+  agentId: string;
+  title: string;
+  updatedAt: number;
+  model: string | null;
+  cwd: string | null;
+};
+
+export type ChatTextRow = {
+  kind: "user" | "assistant" | "reasoning";
+  key: string;
+  text: string;
+  /** Correlates an optimistic user row with the message Letta persists. */
+  otid?: string;
+};
+
+export type ChatToolRow = {
+  kind: "tool_call";
+  key: string;
+  toolCallId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  status: "streaming" | "ready" | "complete";
+  result?: { content: string; isError: boolean };
+};
+
+export type ChatRow = ChatTextRow | ChatToolRow;
+
+export type ApprovalRequest = {
+  requestId: string;
+  toolCallId: string | null;
+  toolName: string;
+  input: Record<string, unknown>;
+  /** "Don't ask again" style grants offered by the runtime. */
+  suggestions: Array<{ id: string; text: string }>;
+};
+
+export type ApprovalDecision =
+  | { behavior: "allow"; updatedInput?: Record<string, unknown>; suggestionIds?: string[] }
+  | { behavior: "deny"; message?: string };
+
+export type HistoryResult = {
+  rows: ChatRow[];
+  hasMore: boolean;
+  running: boolean;
+  activity: string | null;
+  approvals: ApprovalRequest[];
+};
+
+export type SendMessageInput = {
+  agentId: string;
+  /** null starts a new conversation. */
+  conversationId: string | null;
+  text: string;
+  otid: string;
+  cwd: string;
+  model?: string;
+};
+
+/** Main -> renderer push events. */
+export type AppEvent =
+  | { type: "connection"; state: ConnectionState }
+  | { type: "turn.started"; conversationId: string }
+  | { type: "turn.rows"; conversationId: string; rows: ChatRow[] }
+  | { type: "turn.rows.removed"; conversationId: string; keys: string[] }
+  | { type: "turn.activity"; conversationId: string; activity: string | null }
+  | { type: "turn.finished"; conversationId: string; error?: string }
+  | { type: "approval.requested"; conversationId: string; request: ApprovalRequest }
+  | { type: "approval.resolved"; conversationId: string; requestId: string }
+  | { type: "conversation.updated"; conversation: ConversationSummary }
+  | { type: "menu"; command: "new-chat" | "settings" };
+
+/** Renderer -> main requests. Every method is an `ipcRenderer.invoke` round trip. */
+export type AppRequests = {
+  getSettings(): AppSettings;
+  updateSettings(update: SettingsUpdate): AppSettings;
+  getConnection(): ConnectionState;
+  reconnect(): ConnectionState;
+  listAgents(): AgentSummary[];
+  createAgent(input: { name: string; model?: string }): AgentSummary;
+  listModels(): ModelOption[];
+  listConversations(agentId: string): ConversationSummary[];
+  loadHistory(conversationId: string, limit: number): HistoryResult;
+  renameConversation(conversationId: string, title: string): ConversationSummary;
+  archiveConversation(conversationId: string): void;
+  sendMessage(input: SendMessageInput): ConversationSummary;
+  stopTurn(conversationId: string): void;
+  respondApproval(conversationId: string, requestId: string, decision: ApprovalDecision): void;
+  selectDirectory(): string | null;
+};
+
+export type AppBridge = {
+  [K in keyof AppRequests]: (
+    ...args: Parameters<AppRequests[K]>
+  ) => Promise<ReturnType<AppRequests[K]>>;
+} & {
+  onEvent(listener: (event: AppEvent) => void): () => void;
+  platform: string;
+};

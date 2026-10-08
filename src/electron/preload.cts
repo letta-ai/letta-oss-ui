@@ -1,41 +1,52 @@
-import electron from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type { AppBridge, AppEvent, AppRequests } from "./types.js" with { "resolution-mode": "import" };
 
-electron.contextBridge.exposeInMainWorld("electron", {
-    subscribeStatistics: (callback) =>
-        ipcOn("statistics", stats => {
-            callback(stats);
-        }),
-    getStaticData: () => ipcInvoke("getStaticData"),
-    
-    // Letta Agent IPC APIs
-    sendClientEvent: (event: any) => {
-        electron.ipcRenderer.send("client-event", event);
+const METHODS = [
+  "getSettings",
+  "updateSettings",
+  "getConnection",
+  "reconnect",
+  "listAgents",
+  "createAgent",
+  "listModels",
+  "listConversations",
+  "loadHistory",
+  "renameConversation",
+  "archiveConversation",
+  "sendMessage",
+  "stopTurn",
+  "respondApproval",
+  "selectDirectory",
+] as const satisfies readonly (keyof AppRequests)[];
+
+// Fails to compile if a request is added to AppRequests but not listed above.
+type Missing = Exclude<keyof AppRequests, (typeof METHODS)[number]>;
+const exhaustive: Missing extends never ? true : never = true;
+void exhaustive;
+
+type Reply = { ok: true; value: unknown } | { ok: false; error: string };
+
+const requests = Object.fromEntries(
+  METHODS.map((method) => [
+    method,
+    async (...args: unknown[]) => {
+      const reply = (await ipcRenderer.invoke(`cowork:${method}`, ...args)) as Reply;
+      if (!reply.ok) throw new Error(reply.error);
+      return reply.value;
     },
-    onServerEvent: (callback: (event: any) => void) => {
-        const cb = (_: Electron.IpcRendererEvent, payload: string) => {
-            try {
-                const event = JSON.parse(payload);
-                callback(event);
-            } catch (error) {
-                console.error("Failed to parse server event:", error);
-            }
-        };
-        electron.ipcRenderer.on("server-event", cb);
-        return () => electron.ipcRenderer.off("server-event", cb);
-    },
+  ]),
+);
 
-    getRecentCwds: (limit?: number) => 
-        ipcInvoke("get-recent-cwds", limit),
-    selectDirectory: () => 
-        ipcInvoke("select-directory")
-} satisfies Window['electron'])
+const bridge = {
+  ...requests,
+  onEvent: (listener: (event: AppEvent) => void) => {
+    const handler = (_: IpcRendererEvent, event: AppEvent) => listener(event);
+    ipcRenderer.on("cowork:event", handler);
+    return () => {
+      ipcRenderer.off("cowork:event", handler);
+    };
+  },
+  platform: process.platform,
+} as AppBridge;
 
-function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {
-    return electron.ipcRenderer.invoke(key, ...args);
-}
-
-function ipcOn<Key extends keyof EventPayloadMapping>(key: Key, callback: (payload: EventPayloadMapping[Key]) => void) {
-    const cb = (_: Electron.IpcRendererEvent, payload: any) => callback(payload)
-    electron.ipcRenderer.on(key, cb);
-    return () => electron.ipcRenderer.off(key, cb)
-}
+contextBridge.exposeInMainWorld("cowork", bridge);
