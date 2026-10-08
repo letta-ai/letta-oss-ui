@@ -2,7 +2,7 @@
 
 # Letta Cowork
 
-[![Platform](https://img.shields.io/badge/platform-%20macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/letta-ai/letta-cowork/releases)
+[![Platform](https://img.shields.io/badge/platform-%20macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/letta-ai/letta-oss-ui/releases)
 
 An open-source desktop app for working with Letta agents, built on the [Letta Agent SDK](https://docs.letta.com/agent-sdk).
 
@@ -25,8 +25,8 @@ The code started as a fork of [Claude-Cowork](https://github.com/DevAgentForge/C
 You need [Bun](https://bun.sh/).
 
 ```bash
-git clone https://github.com/letta-ai/letta-cowork.git
-cd letta-cowork
+git clone https://github.com/letta-ai/letta-oss-ui.git
+cd letta-oss-ui
 bun install
 bun run dev
 ```
