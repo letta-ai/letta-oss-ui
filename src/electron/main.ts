@@ -1,116 +1,183 @@
-import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu } from "electron"
-import { execSync } from "child_process";
-import { config as dotenvConfig } from "dotenv";
-import { join } from "path";
-import { ipcMainHandle, isDev, DEV_PORT } from "./util.js";
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  nativeTheme,
+  shell,
+  type MenuItemConstructorOptions,
+} from "electron";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { broadcast, registerIpc } from "./ipc.js";
+import { disconnect, initRuntime } from "./libs/runtime.js";
+import type { AppEvent } from "./types.js";
+import { DEV_URL, getIconPath, getPreloadPath, getUIPath, isAppUrl, isDev } from "./util.js";
 
-// Load .env file from project root
-dotenvConfig({ path: join(process.cwd(), ".env") });
+const isMac = process.platform === "darwin";
+const QUIT_TIMEOUT_MS = 3_000;
 
-// Backend selection (local runtime / remote app server / cloud) is resolved in
-// libs/runner.ts from LETTA_BACKEND, LETTA_API_KEY, and LETTA_SERVER_URL.
-// The SDK bundles its own Letta Code CLI (@letta-ai/letta-code); a user-set
-// LETTA_CLI_PATH still takes precedence if exported in the environment.
-import { getPreloadPath, getUIPath, getIconPath } from "./pathResolver.js";
-import { getStaticData, pollResources, stopPolling } from "./test.js";
-import { handleClientEvent, cleanupAllSessions } from "./ipc-handlers.js";
-import type { ClientEvent } from "./types.js";
-
-let cleanupComplete = false;
 let mainWindow: BrowserWindow | null = null;
+let quitting = false;
 
-function killViteDevServer(): void {
-    if (!isDev()) return;
-    try {
-        if (process.platform === 'win32') {
-            execSync(`for /f "tokens=5" %a in ('netstat -ano ^| findstr :${DEV_PORT}') do taskkill /PID %a /F`, { stdio: 'ignore', shell: 'cmd.exe' });
-        } else {
-            execSync(`lsof -ti:${DEV_PORT} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
-        }
-    } catch {
-        // Process may already be dead
-    }
+/** In development, a `.env` in the project root provides connection defaults. */
+function loadDevEnv(): void {
+  if (app.isPackaged) return;
+  try {
+    process.loadEnvFile(join(process.cwd(), ".env"));
+  } catch {
+    // No .env file - settings come from the Settings dialog.
+  }
 }
 
-function cleanup(): void {
-    if (cleanupComplete) return;
-    cleanupComplete = true;
-
-    globalShortcut.unregisterAll();
-    stopPolling();
-    cleanupAllSessions();
-    killViteDevServer();
+/**
+ * Apps launched from Finder or a desktop launcher get a minimal PATH, so tools
+ * the agent runs (git, node, package managers) would not be found. Take PATH
+ * from the user's login shell instead.
+ */
+function inheritShellPath(): void {
+  if (process.platform === "win32" || !app.isPackaged) return;
+  try {
+    const output = execFileSync(
+      process.env.SHELL || "/bin/sh",
+      ["-ilc", 'printf "__PATH__%s__PATH__" "$PATH"'],
+      { encoding: "utf8", timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] },
+    );
+    const path = output.match(/__PATH__(.+)__PATH__/s)?.[1];
+    if (path) process.env.PATH = path;
+  } catch {
+    // Keep the inherited PATH.
+  }
 }
 
-function handleSignal(): void {
-    cleanup();
-    app.quit();
+function sendMenuCommand(command: Extract<AppEvent, { type: "menu" }>["command"]): void {
+  if (!mainWindow) createWindow();
+  mainWindow?.show();
+  broadcast({ type: "menu", command });
 }
 
-// Initialize everything when app is ready
-app.on("ready", () => {
-    Menu.setApplicationMenu(null);
-    // Setup event handlers
-    app.on("before-quit", cleanup);
-    app.on("will-quit", cleanup);
-    app.on("window-all-closed", () => {
-        cleanup();
-        app.quit();
+function buildMenu(): Menu {
+  const template: MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              {
+                label: "Settings...",
+                accelerator: "CmdOrCtrl+,",
+                click: () => sendMenuCommand("settings"),
+              },
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" },
+            ],
+          } satisfies MenuItemConstructorOptions,
+        ]
+      : []),
+    {
+      label: "File",
+      submenu: [
+        { label: "New Chat", accelerator: "CmdOrCtrl+N", click: () => sendMenuCommand("new-chat") },
+        ...(isMac
+          ? []
+          : ([
+              {
+                label: "Settings...",
+                accelerator: "CmdOrCtrl+,",
+                click: () => sendMenuCommand("settings"),
+              },
+            ] satisfies MenuItemConstructorOptions[])),
+        { type: "separator" },
+        isMac ? { role: "close" } : { role: "quit" },
+      ],
+    },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+  ];
+  return Menu.buildFromTemplate(template);
+}
+
+function createWindow(): void {
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 760,
+    minHeight: 520,
+    show: false,
+    icon: getIconPath(),
+    autoHideMenuBar: true,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1d1d1d" : "#ffffff",
+    ...(isMac
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 15, y: 18 } }
+      : {}),
+    webPreferences: { preload: getPreloadPath() },
+  });
+
+  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
+  // Links in agent output open in the browser, never inside the app window.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
+  });
+
+  if (isDev()) void mainWindow.loadURL(DEV_URL);
+  else void mainWindow.loadFile(getUIPath());
+}
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+
+  void app.whenReady().then(() => {
+    loadDevEnv();
+    inheritShellPath();
+    Menu.setApplicationMenu(buildMenu());
+    registerIpc();
+    initRuntime(broadcast);
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+  });
 
-    process.on("SIGTERM", handleSignal);
-    process.on("SIGINT", handleSignal);
-    process.on("SIGHUP", handleSignal);
+  app.on("window-all-closed", () => {
+    if (!isMac) app.quit();
+  });
 
-    // Create main window
-    mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
-        minWidth: 900,
-        minHeight: 600,
-        webPreferences: {
-            preload: getPreloadPath(),
-        },
-        icon: getIconPath(),
-        titleBarStyle: "hiddenInset",
-        backgroundColor: "#FAF9F6",
-        trafficLightPosition: { x: 15, y: 18 }
-    });
+  // Stop running turns and the Letta runtime, then exit. `app.exit` is used
+  // for the second step because the quit sequence was already interrupted once.
+  app.on("before-quit", (event) => {
+    event.preventDefault();
+    if (quitting) return;
+    quitting = true;
+    const timeout = new Promise((resolve) => setTimeout(resolve, QUIT_TIMEOUT_MS));
+    void Promise.race([disconnect(), timeout]).finally(() => app.exit(0));
+  });
 
-    if (isDev()) mainWindow.loadURL(`http://localhost:${DEV_PORT}`)
-    else mainWindow.loadFile(getUIPath());
-
-    globalShortcut.register('CommandOrControl+Q', () => {
-        cleanup();
-        app.quit();
-    });
-
-    pollResources(mainWindow);
-
-    ipcMainHandle("getStaticData", () => {
-        return getStaticData();
-    });
-
-    // Handle client events
-    ipcMain.on("client-event", (_: Electron.IpcMainEvent, event: ClientEvent) => {
-        handleClientEvent(event);
-    });
-
-    // Handle recent cwds request (simplified - no local storage)
-    ipcMainHandle("get-recent-cwds", () => {
-        return [process.cwd()]; // Just return current directory
-    });
-
-    // Handle directory selection
-    ipcMainHandle("select-directory", async () => {
-        const result = await dialog.showOpenDialog(mainWindow!, {
-            properties: ['openDirectory']
-        });
-
-        if (result.canceled) {
-            return null;
-        }
-
-        return result.filePaths[0];
-    });
-})
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.on(signal, () => app.quit());
+  }
+}

@@ -3,21 +3,27 @@
     "productName": "Letta Cowork",
     "files": [
         "dist-electron",
-        "dist-react"
-    ],
-    "extraResources": [
-        "dist-electron/preload.cjs"
+        "dist-react",
+        "templateIcon.png"
     ],
     "asarUnpack": [
-        "node_modules/@letta-ai/letta-agent-sdk/**/*",
-        "node_modules/@letta-ai/letta-code/**/*"
+        "node_modules/@letta-ai/letta-code/**/*",
+        "node_modules/@img/**/*",
+        "node_modules/@janhapke/**/*",
+        "node_modules/@vscode/**/*",
+        "node_modules/detect-libc/**/*",
+        "node_modules/node-pty/**/*",
+        "node_modules/semver/**/*",
+        "node_modules/sharp/**/*",
+        "node_modules/ws/**/*"
     ],
     "mac": {
-        "target": "dmg"
+        "target": "dmg",
+        "category": "public.app-category.developer-tools"
     },
     "linux": {
         "target": "AppImage",
-        "category": "Utility"
+        "category": "Development"
     },
     "win": {
         "target": [

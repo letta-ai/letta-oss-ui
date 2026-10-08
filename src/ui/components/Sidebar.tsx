@@ -1,168 +1,316 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useAppStore } from "../store/useAppStore";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { modelLabel, relativeTime } from "../lib/format";
+import { useAppStore } from "../store";
+import type { ConnectionState, ConversationSummary } from "../types";
+import { CheckIcon, ChevronDownIcon, MoreIcon, PlusIcon, SettingsIcon, Spinner } from "./icons";
 
-interface SidebarProps {
-  connected: boolean;
-  onNewSession: () => void;
-  onDeleteSession: (sessionId: string) => void;
-}
+const isMac = window.cowork.platform === "darwin";
 
-export function Sidebar({
-  onNewSession,
-  onDeleteSession
-}: SidebarProps) {
-  const sessions = useAppStore((state) => state.sessions);
-  const activeSessionId = useAppStore((state) => state.activeSessionId);
-  const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
-  const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const closeTimerRef = useRef<number | null>(null);
+const menuContent =
+  "z-50 min-w-[220px] rounded-xl border border-border bg-surface p-1 shadow-elevated";
+const menuItem =
+  "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-800 outline-none data-[highlighted]:bg-surface-tertiary";
 
-  const formatCwd = (cwd?: string) => {
-    if (!cwd) return "Working dir unavailable";
-    const parts = cwd.split(/[\\/]+/).filter(Boolean);
-    const tail = parts.slice(-2).join("/");
-    return `/${tail || cwd}`;
-  };
-
-  const sessionList = useMemo(() => {
-    const list = Object.values(sessions);
-    list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    return list;
-  }, [sessions]);
-
-  useEffect(() => {
-    setCopied(false);
-    if (closeTimerRef.current) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  }, [resumeSessionId]);
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) {
-        window.clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleCopyCommand = async () => {
-    if (!resumeSessionId) return;
-    const command = `letta --conv ${resumeSessionId}`;
-    try {
-      await navigator.clipboard.writeText(command);
-    } catch {
-      return;
-    }
-    setCopied(true);
-    if (closeTimerRef.current) {
-      window.clearTimeout(closeTimerRef.current);
-    }
-    closeTimerRef.current = window.setTimeout(() => {
-      setResumeSessionId(null);
-    }, 3000);
-  };
+function AgentSwitcher() {
+  const agents = useAppStore((state) => state.agents);
+  const agentId = useAppStore((state) => state.agentId);
+  const models = useAppStore((state) => state.models);
+  const selectAgent = useAppStore((state) => state.selectAgent);
+  const setNewAgentOpen = useAppStore((state) => state.setNewAgentOpen);
+  const current = agents.find((agent) => agent.id === agentId);
 
   return (
-    <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-border bg-sidebar px-4 pb-4 pt-12">
-      <div 
-        className="absolute top-0 left-0 right-0 h-12"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
-      <div className="flex gap-2">
-        <button
-          className="flex-1 rounded-xl border border-ink-900/10 bg-surface px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"
-          onClick={onNewSession}
-        >
-          + New Task
-        </button>
-      </div>
-      <div className="flex flex-col gap-2 overflow-y-auto">
-        {sessionList.length === 0 && (
-          <div className="rounded-xl border border-ink-900/5 bg-surface px-4 py-5 text-center text-xs text-muted">
-            No sessions yet. Click "+ New Task" to start.
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left hover:bg-ink-900/5 transition-colors outline-none">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-ink-900">
+            {current?.name ?? "No agent"}
+          </span>
+          <span className="block truncate text-xs text-muted">
+            {current ? modelLabel(current.model, models) : "Create an agent to begin"}
+          </span>
+        </span>
+        <ChevronDownIcon className="h-4 w-4 shrink-0 text-muted" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className={`${menuContent} w-[256px]`} align="start" sideOffset={6}>
+          <div className="max-h-72 overflow-y-auto">
+            {agents.map((agent) => (
+              <DropdownMenu.Item
+                key={agent.id}
+                className={menuItem}
+                onSelect={() => agent.id !== agentId && void selectAgent(agent.id)}
+              >
+                <span className="w-4 shrink-0">
+                  {agent.id === agentId && <CheckIcon className="h-4 w-4 text-accent" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate">{agent.name}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {modelLabel(agent.model, models)}
+                  </span>
+                </span>
+              </DropdownMenu.Item>
+            ))}
           </div>
+          {agents.length > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border" />}
+          <DropdownMenu.Item className={menuItem} onSelect={() => setNewAgentOpen(true)}>
+            <PlusIcon className="h-4 w-4 shrink-0 text-muted" />
+            New agent...
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function ConversationItem({
+  conversation,
+  now,
+  onRename,
+  onResume,
+}: {
+  conversation: ConversationSummary;
+  now: number;
+  onRename: (conversation: ConversationSummary) => void;
+  onResume: (conversation: ConversationSummary) => void;
+}) {
+  const active = useAppStore((state) => state.activeId === conversation.id);
+  const running = useAppStore((state) => state.chats[conversation.id]?.running ?? false);
+  const waiting = useAppStore((state) => (state.chats[conversation.id]?.approvals.length ?? 0) > 0);
+  const openChat = useAppStore((state) => state.openChat);
+  const archiveConversation = useAppStore((state) => state.archiveConversation);
+
+  return (
+    <div
+      className={`group relative flex items-center rounded-lg transition-colors ${active ? "bg-ink-900/8" : "hover:bg-ink-900/5"}`}
+    >
+      <button
+        type="button"
+        onClick={() => openChat(conversation.id)}
+        className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-2.5 pr-1 text-left outline-none"
+      >
+        <span className={`min-w-0 flex-1 truncate text-sm ${active ? "text-ink-900" : "text-ink-800"}`}>
+          {conversation.title || "New chat"}
+        </span>
+        {running ? (
+          waiting ? (
+            <span className="h-2 w-2 shrink-0 rounded-full bg-warning" title="Waiting for you" />
+          ) : (
+            <Spinner className="h-3.5 w-3.5 shrink-0 text-muted" />
+          )
+        ) : (
+          <span className="shrink-0 text-xs text-muted-light group-hover:hidden">
+            {relativeTime(conversation.updatedAt, now)}
+          </span>
         )}
-        {sessionList.map((session) => (
-          <div
-            key={session.id}
-            className={`cursor-pointer rounded-xl border px-2 py-3 text-left transition ${activeSessionId === session.id ? "border-accent/30 bg-accent-subtle" : "border-ink-900/5 bg-surface hover:bg-surface-tertiary"}`}
-            onClick={() => setActiveSessionId(session.id)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveSessionId(session.id); } }}
-            role="button"
-            tabIndex={0}
+      </button>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          aria-label="Chat options"
+          className="mr-1 hidden shrink-0 rounded-md p-1 text-muted hover:bg-ink-900/10 hover:text-ink-800 group-hover:block data-[state=open]:block outline-none"
+        >
+          <MoreIcon className="h-4 w-4" />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className={menuContent} align="start" sideOffset={6}>
+            <DropdownMenu.Item className={menuItem} onSelect={() => onRename(conversation)}>
+              Rename
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={menuItem} onSelect={() => onResume(conversation)}>
+              Resume in Letta Code
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="my-1 h-px bg-border" />
+            <DropdownMenu.Item
+              className={`${menuItem} text-error`}
+              onSelect={() => void archiveConversation(conversation.id)}
+            >
+              Archive
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    </div>
+  );
+}
+
+function ConnectionBadge({ connection }: { connection: ConnectionState | null }) {
+  if (!connection || connection.status === "connecting") {
+    return (
+      <span className="flex min-w-0 items-center gap-2 text-xs text-muted">
+        <Spinner className="h-3 w-3 shrink-0" />
+        Connecting
+      </span>
+    );
+  }
+  const ready = connection.status === "ready";
+  return (
+    <span
+      className="flex min-w-0 items-center gap-2 text-xs text-muted"
+      title={ready ? connection.detail : connection.error}
+    >
+      <span className={`h-2 w-2 shrink-0 rounded-full ${ready ? "bg-success" : "bg-error"}`} />
+      <span className="truncate">{ready ? connection.detail : "Not connected"}</span>
+    </span>
+  );
+}
+
+const dialogOverlay = "fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]";
+const dialogContent =
+  "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-surface p-5 shadow-elevated focus:outline-none";
+
+function RenameDialog({
+  conversation,
+  onClose,
+}: {
+  conversation: ConversationSummary;
+  onClose: () => void;
+}) {
+  const renameConversation = useAppStore((state) => state.renameConversation);
+  const [title, setTitle] = useState(conversation.title);
+
+  return (
+    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={dialogOverlay} />
+        <Dialog.Content className={dialogContent} aria-describedby={undefined}>
+          <Dialog.Title className="text-base font-semibold text-ink-900">Rename chat</Dialog.Title>
+          <form
+            className="mt-3 grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (title.trim()) void renameConversation(conversation.id, title);
+              onClose();
+            }}
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                <div className={`text-[12px] font-medium ${session.status === "running" ? "text-info" : session.status === "completed" ? "text-success" : session.status === "error" ? "text-error" : "text-ink-800"}`}>
-                  {session.title}
-                </div>
-                <div className="flex items-center justify-between mt-0.5 text-xs text-muted">
-                  <span className="truncate">{formatCwd(session.cwd)}</span>
-                </div>
-              </div>
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild>
-                  <button className="flex-shrink-0 rounded-full p-1.5 text-ink-500 hover:bg-ink-900/10" aria-label="Open session menu" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
-                      <circle cx="5" cy="12" r="1.7" />
-                      <circle cx="12" cy="12" r="1.7" />
-                      <circle cx="19" cy="12" r="1.7" />
-                    </svg>
-                  </button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content className="z-50 min-w-[220px] rounded-xl border border-ink-900/10 bg-surface p-1 shadow-lg" align="center" sideOffset={8}>
-                    <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-ink-900/5" onSelect={() => onDeleteSession(session.id)}>
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-error/80" fill="none" stroke="currentColor" strokeWidth="1.8">
-                        <path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M7 7l1 12a1 1 0 0 0 1 .9h6a1 1 0 0 0 1-.9l1-12" />
-                      </svg>
-                      Delete this session
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-ink-900/5" onSelect={() => setResumeSessionId(session.id)}>
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-ink-500" fill="none" stroke="currentColor" strokeWidth="1.8">
-                        <path d="M4 5h16v14H4z" /><path d="M7 9h10M7 12h6" /><path d="M13 15l3 2-3 2" />
-                      </svg>
-                      Resume in Letta Code
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Root>
-            </div>
-          </div>
-        ))}
-      </div>
-      <Dialog.Root open={!!resumeSessionId} onOpenChange={(open) => !open && setResumeSessionId(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-4">
-              <Dialog.Title className="text-lg font-semibold text-ink-800">Resume</Dialog.Title>
-              <Dialog.Close asChild>
-                <button className="rounded-full p-1 text-ink-500 hover:bg-ink-900/10" aria-label="Close dialog">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 6l12 12M18 6l-12 12" />
-                  </svg>
-                </button>
-              </Dialog.Close>
-            </div>
-            <div className="mt-4 flex items-center gap-2 rounded-xl border border-ink-900/10 bg-surface px-3 py-2 font-mono text-xs text-ink-700">
-              <span className="flex-1 break-all">{resumeSessionId ? `letta --conv ${resumeSessionId}` : ""}</span>
-              <button className="rounded-lg p-1.5 text-ink-600 hover:bg-ink-900/10" onClick={handleCopyCommand} aria-label="Copy resume command">
-                {copied ? (
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12l4 4L19 6" /></svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
-                )}
+            <input
+              autoFocus
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="field"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" className="button-secondary" onClick={onClose}>
+                Cancel
+              </button>
+              <button type="submit" className="button-primary" disabled={!title.trim()}>
+                Rename
               </button>
             </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function ResumeDialog({
+  conversation,
+  onClose,
+}: {
+  conversation: ConversationSummary;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const command = `letta --conv ${conversation.id}`;
+
+  return (
+    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={dialogOverlay} />
+        <Dialog.Content className={dialogContent}>
+          <Dialog.Title className="text-base font-semibold text-ink-900">
+            Resume in Letta Code
+          </Dialog.Title>
+          <Dialog.Description className="mt-1 text-sm text-muted">
+            Run this in a terminal to continue the chat from the command line.
+          </Dialog.Description>
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-surface-tertiary px-3 py-2">
+            <code className="min-w-0 flex-1 break-all font-mono text-xs text-ink-900">{command}</code>
+            <button
+              type="button"
+              className="button-secondary shrink-0"
+              onClick={() => {
+                void navigator.clipboard.writeText(command).then(() => setCopied(true));
+              }}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+export function Sidebar() {
+  const conversations = useAppStore((state) => state.conversations);
+  const conversationsLoaded = useAppStore((state) => state.conversationsLoaded);
+  const agentId = useAppStore((state) => state.agentId);
+  const connection = useAppStore((state) => state.connection);
+  const openChat = useAppStore((state) => state.openChat);
+  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen);
+  const [renaming, setRenaming] = useState<ConversationSummary | null>(null);
+  const [resuming, setResuming] = useState<ConversationSummary | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Keep the relative timestamps fresh.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <aside className="flex w-[272px] shrink-0 flex-col border-r border-border bg-sidebar">
+      <div className={`app-drag shrink-0 ${isMac ? "h-12" : "h-3"}`} />
+      <div className="px-2.5">
+        <AgentSwitcher />
+        <button
+          type="button"
+          disabled={!agentId}
+          onClick={() => openChat(null)}
+          className="mt-2 flex w-full items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm font-medium text-ink-800 hover:bg-surface-tertiary transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <PlusIcon className="h-4 w-4" />
+          New chat
+          <kbd className="ml-auto font-sans text-xs text-muted-light">{isMac ? "⌘N" : "Ctrl+N"}</kbd>
+        </button>
+      </div>
+
+      <nav className="mt-3 min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+        {agentId && conversationsLoaded && conversations.length === 0 && (
+          <p className="px-2.5 py-3 text-xs text-muted">No chats yet.</p>
+        )}
+        <div className="flex flex-col gap-0.5">
+          {conversations.map((conversation) => (
+            <ConversationItem
+              key={conversation.id}
+              conversation={conversation}
+              now={now}
+              onRename={setRenaming}
+              onResume={setResuming}
+            />
+          ))}
+        </div>
+      </nav>
+
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3.5 py-2.5">
+        <ConnectionBadge connection={connection} />
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Settings"
+          title="Settings"
+          className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-ink-900/8 hover:text-ink-800 transition-colors"
+        >
+          <SettingsIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      {renaming && <RenameDialog conversation={renaming} onClose={() => setRenaming(null)} />}
+      {resuming && <ResumeDialog conversation={resuming} onClose={() => setResuming(null)} />}
     </aside>
   );
 }

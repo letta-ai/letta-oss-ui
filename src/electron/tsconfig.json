@@ -1,13 +1,12 @@
 {
     "compilerOptions": {
         "strict": true,
-        "target": "ESNext",
+        "target": "ES2023",
         "module": "NodeNext",
         "outDir": "../../dist-electron",
         "skipLibCheck": true,
-        // add global types
-        "types": [
-            "../../types"
-        ]
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "types": ["node"]
     }
 }

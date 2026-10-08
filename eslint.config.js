@@ -5,12 +5,17 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-	{ ignores: ['dist'] },
+	{ ignores: ['dist', 'dist-react', 'dist-electron'] },
 	{
 		extends: [js.configs.recommended, ...tseslint.configs.recommended],
-		files: ['**/*.{ts,tsx}'],
+		files: ['**/*.{ts,tsx,cts}'],
 		languageOptions: {
-			ecmaVersion: 2020,
+			ecmaVersion: 2023,
+		},
+	},
+	{
+		files: ['src/ui/**/*.{ts,tsx}'],
+		languageOptions: {
 			globals: globals.browser,
 		},
 		plugins: {
@@ -24,10 +29,11 @@ export default tseslint.config(
 				{ allowConstantExport: true },
 			],
 		},
-		settings: {
-			"import/resolver": {
-				"typescript": {}
-			}
-		}
+	},
+	{
+		files: ['src/electron/**/*.{ts,cts}'],
+		languageOptions: {
+			globals: globals.node,
+		},
 	},
 )
