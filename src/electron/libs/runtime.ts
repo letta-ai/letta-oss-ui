@@ -18,10 +18,10 @@ import type {
   ConnectionState,
   ConversationSummary,
   HistoryResult,
-  ModelOption,
   SendMessageInput,
 } from "../types.js";
 import { startAppServer, type AppServerHandle } from "./app-server.js";
+import { serverBackend, setControlTarget } from "./control.js";
 import {
   type ConnectionConfig,
   forgetConversation,
@@ -148,6 +148,16 @@ async function connect(): Promise<LettaAgentClient> {
     // A cheap request that proves the server is reachable and authenticated.
     await next.agents.list({ limit: 1 });
 
+    setControlTarget(
+      owned
+        ? { url: owned.url }
+        : {
+            url: config.serverUrl,
+            ...(config.serverToken ? { authToken: config.serverToken } : {}),
+          },
+    );
+    const providers = (await serverBackend()) === "local";
+
     owned?.onExit((reason) => {
       if (server !== owned) return;
       void disconnect().then(() => {
@@ -156,9 +166,10 @@ async function connect(): Promise<LettaAgentClient> {
     });
     client = next;
     server = owned;
-    setConnection({ status: "ready", backend: config.backend, detail });
+    setConnection({ status: "ready", backend: config.backend, detail, providers });
     return next;
   } catch (error) {
+    setControlTarget(null);
     await next?.close().catch(() => undefined);
     owned?.close();
     setConnection({
@@ -185,6 +196,7 @@ export async function disconnect(): Promise<void> {
     finishTurn(turn);
   }
   conversations.clear();
+  setControlTarget(null);
   const previousClient = client;
   const previousServer = server;
   client = null;
@@ -224,15 +236,6 @@ export async function createAgent(input: { name: string; model?: string }): Prom
   });
   setAgentId(agentId);
   return toAgentSummary(await sdk.agents.retrieve(agentId));
-}
-
-export async function listModels(): Promise<ModelOption[]> {
-  const sdk = await ensureClient();
-  const result = await sdk.models.list();
-  const available = result.availableHandles ? new Set(result.availableHandles) : null;
-  return result.entries
-    .filter((entry) => !available || available.has(entry.handle))
-    .map((entry) => ({ id: entry.id, handle: entry.handle, label: entry.label || entry.handle }));
 }
 
 // --- Conversations ----------------------------------------------------------

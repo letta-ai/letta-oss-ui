@@ -7,7 +7,6 @@ import {
   getConnection,
   listAgents,
   listConversations,
-  listModels,
   loadHistory,
   reconnect,
   renameConversation,
@@ -15,6 +14,15 @@ import {
   sendMessage,
   stopTurn,
 } from "./libs/runtime.js";
+import {
+  deleteMemoryFile,
+  listMemory,
+  listMemoryHistory,
+  readMemoryFile,
+  readMemoryFileAt,
+  writeMemoryFile,
+} from "./libs/memory.js";
+import { connectProvider, disconnectProvider, listModels, listProviders } from "./libs/providers.js";
 import { getSettings, updateSettings } from "./libs/settings.js";
 import { describeError } from "./libs/transcript.js";
 import { validateEventFrame } from "./util.js";
@@ -45,6 +53,15 @@ const handlers: Handlers = {
   listAgents,
   createAgent,
   listModels,
+  listProviders,
+  connectProvider,
+  disconnectProvider,
+  listMemory,
+  readMemoryFile,
+  writeMemoryFile,
+  deleteMemoryFile,
+  listMemoryHistory,
+  readMemoryFileAt,
   listConversations,
   loadHistory,
   renameConversation,

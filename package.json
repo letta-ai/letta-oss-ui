@@ -26,7 +26,8 @@
 		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux --x64"
 	},
 	"dependencies": {
-		"@letta-ai/letta-agent-sdk": "0.8.32"
+		"@letta-ai/letta-agent-sdk": "0.8.32",
+		"@letta-ai/letta-code": "0.34.6"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
