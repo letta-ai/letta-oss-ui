@@ -23,8 +23,14 @@ function Placeholder() {
   const agentsLoaded = useAppStore((state) => state.agentsLoaded);
   const agent = useAppStore((state) => state.agents.find((item) => item.id === state.agentId));
   const reconnect = useAppStore((state) => state.reconnect);
-  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen);
+  const openSettings = useAppStore((state) => state.openSettings);
   const setNewAgentOpen = useAppStore((state) => state.setNewAgentOpen);
+  // Known to have no provider connected (not merely still loading).
+  const needsProvider = useAppStore(
+    (state) =>
+      state.providers !== null &&
+      !state.providers.some((provider) => provider.connections.length > 0),
+  );
 
   if (connection?.status === "error") {
     return (
@@ -35,7 +41,7 @@ function Placeholder() {
           <button type="button" className="button-primary" onClick={reconnect}>
             Try again
           </button>
-          <button type="button" className="button-secondary" onClick={() => setSettingsOpen(true)}>
+          <button type="button" className="button-secondary" onClick={() => openSettings("connection")}>
             Open Settings
           </button>
         </div>
@@ -48,6 +54,25 @@ function Placeholder() {
       <Centered>
         <Spinner className="h-5 w-5 text-muted" />
         <p className="mt-3 text-sm text-muted">Starting Letta</p>
+      </Centered>
+    );
+  }
+
+  if (needsProvider) {
+    return (
+      <Centered>
+        <h2 className="text-lg font-semibold text-ink-900">Connect a model provider</h2>
+        <p className="mt-2 max-w-sm text-sm text-muted">
+          Agents on this computer need a model to think with. Add an API key, or point to a local
+          server such as Ollama or LM Studio.
+        </p>
+        <button
+          type="button"
+          className="button-primary mt-5"
+          onClick={() => openSettings("providers")}
+        >
+          Connect a provider
+        </button>
       </Centered>
     );
   }

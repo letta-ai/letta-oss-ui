@@ -10,7 +10,9 @@ import type {
   ChatTextRow,
   ConnectionState,
   ConversationSummary,
+  MemoryFile,
   ModelOption,
+  ProviderSummary,
   SettingsUpdate,
 } from "./types";
 
@@ -32,6 +34,16 @@ export type ChatState = {
   approvals: ApprovalRequest[];
 };
 
+export type MemoryState = {
+  loading: boolean;
+  error: string | null;
+  /** False for agents that do not use file-based memory. */
+  enabled: boolean;
+  files: MemoryFile[];
+};
+
+export type SettingsTab = "connection" | "providers";
+
 const EMPTY_CHAT: ChatState = {
   rows: [],
   loaded: false,
@@ -51,6 +63,11 @@ type AppState = {
   agentsLoaded: boolean;
   agentId: string | null;
   models: ModelOption[];
+  /** null until loaded, or when the backend manages providers itself. */
+  providers: ProviderSummary[] | null;
+  /** What the main area shows for the selected agent. */
+  view: "chat" | "memory";
+  memory: MemoryState | null;
   conversations: ConversationSummary[];
   conversationsLoaded: boolean;
   /** null is the new, unsent chat. */
@@ -65,6 +82,7 @@ type AppState = {
   pendingFirstMessage: ChatTextRow | null;
   notice: string | null;
   settingsOpen: boolean;
+  settingsTab: SettingsTab;
   newAgentOpen: boolean;
 
   bootstrap: () => Promise<void>;
@@ -80,6 +98,18 @@ type AppState = {
   renameConversation: (conversationId: string, title: string) => Promise<void>;
   archiveConversation: (conversationId: string) => Promise<void>;
   saveSettings: (update: SettingsUpdate) => Promise<void>;
+  loadProviders: () => Promise<void>;
+  connectProvider: (input: {
+    providerId: string;
+    authMethodId?: string;
+    fields: Record<string, string>;
+  }) => Promise<void>;
+  disconnectProvider: (input: { providerId: string; providerName?: string }) => Promise<void>;
+  openMemory: () => void;
+  loadMemory: () => Promise<void>;
+  saveMemoryFile: (path: string, content: string) => Promise<void>;
+  deleteMemoryFile: (path: string) => Promise<void>;
+  openSettings: (tab: SettingsTab) => void;
   reconnect: () => void;
   pickCwd: () => Promise<void>;
   setCwd: (cwd: string) => void;
@@ -117,6 +147,9 @@ const CLEARED = {
   agentsLoaded: false,
   agentId: null,
   models: [],
+  providers: null,
+  view: "chat",
+  memory: null,
   conversations: [],
   conversationsLoaded: false,
   activeId: null,
@@ -133,6 +166,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   modelOverrides: {},
   notice: null,
   settingsOpen: false,
+  settingsTab: "connection",
   newAgentOpen: false,
 
   bootstrap: async () => {
@@ -193,6 +227,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             error: event.error ?? null,
           })),
         );
+        // The agent may have rewritten its memory during the turn.
+        if (get().view === "memory") void get().loadMemory();
         break;
       case "approval.requested":
         set((state) =>
@@ -219,7 +255,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case "menu":
         if (event.command === "new-chat") get().openChat(null);
-        else set({ settingsOpen: true });
+        else get().openSettings("connection");
         break;
     }
   },
@@ -232,6 +268,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         .listModels()
         .then((models) => set({ models }))
         .catch(() => undefined);
+      const connection = get().connection;
+      if (connection?.status === "ready" && connection.providers) void get().loadProviders();
 
       const agentId =
         agents.find((agent) => agent.id === settings.agentId)?.id ?? agents[0]?.id ?? null;
@@ -249,6 +287,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       conversationsLoaded: false,
       activeId: null,
       pendingFirstMessage: null,
+      view: "chat",
+      memory: null,
     });
     void api
       .updateSettings({ agentId })
@@ -271,7 +311,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   openChat: (conversationId) => {
-    set({ activeId: conversationId });
+    set({ activeId: conversationId, view: "chat" });
     if (!conversationId) return;
     const chat = get().chats[conversationId];
     if (!chat?.loaded && !chat?.loading) void get().loadHistory(conversationId);
@@ -438,6 +478,68 @@ export const useAppStore = create<AppState>((set, get) => ({
   saveSettings: async (update) => {
     set({ settings: await api.updateSettings(update) });
   },
+
+  loadProviders: async () => {
+    try {
+      set({ providers: await api.listProviders() });
+    } catch (error) {
+      set({ notice: errorMessage(error) });
+    }
+  },
+
+  // Connect and disconnect reject on failure so the form can show the reason.
+  connectProvider: async (input) => {
+    set({ providers: await api.connectProvider(input) });
+    set({ models: await api.listModels(true) });
+  },
+
+  disconnectProvider: async (input) => {
+    set({ providers: await api.disconnectProvider(input) });
+    set({ models: await api.listModels(true) });
+  },
+
+  openMemory: () => {
+    set({ view: "memory" });
+    void get().loadMemory();
+  },
+
+  loadMemory: async () => {
+    const { agentId } = get();
+    if (!agentId) return;
+    set((state) => ({
+      memory: { ...(state.memory ?? { enabled: true, files: [] }), loading: true, error: null },
+    }));
+    try {
+      const overview = await api.listMemory(agentId);
+      if (get().agentId === agentId) set({ memory: { ...overview, loading: false, error: null } });
+    } catch (error) {
+      if (get().agentId !== agentId) return;
+      set((state) => ({
+        memory: {
+          enabled: state.memory?.enabled ?? true,
+          files: state.memory?.files ?? [],
+          loading: false,
+          error: errorMessage(error),
+        },
+      }));
+    }
+  },
+
+  saveMemoryFile: async (path, content) => {
+    const { agentId } = get();
+    if (!agentId) return;
+    await api.writeMemoryFile(agentId, path, content);
+    await get().loadMemory();
+  },
+
+  deleteMemoryFile: async (path) => {
+    const { agentId } = get();
+    if (!agentId) return;
+    await api.deleteMemoryFile(agentId, path);
+    await get().loadMemory();
+  },
+
+  openSettings: (tab) => set({ settingsOpen: true, settingsTab: tab }),
 
   reconnect: () => {
     void api.reconnect();

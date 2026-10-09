@@ -1,8 +1,14 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useAppStore } from "../store";
+import { useAppStore, type SettingsTab } from "../store";
 import type { AppSettings, BackendKind, SettingsUpdate } from "../types";
+import { ProvidersPanel } from "./ProvidersPanel";
 import { CloseIcon, Spinner } from "./icons";
+
+const TABS: Array<{ id: SettingsTab; label: string }> = [
+  { id: "connection", label: "Connection" },
+  { id: "providers", label: "Model providers" },
+];
 
 const BACKENDS: Array<{ kind: BackendKind; label: string; detail: string }> = [
   {
@@ -205,8 +211,10 @@ function SettingsForm({ settings, onClose }: { settings: AppSettings; onClose: (
 
 export function SettingsDialog() {
   const open = useAppStore((state) => state.settingsOpen);
+  const tab = useAppStore((state) => state.settingsTab);
   const settings = useAppStore((state) => state.settings);
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen);
+  const openSettings = useAppStore((state) => state.openSettings);
 
   return (
     <Dialog.Root open={open} onOpenChange={setSettingsOpen}>
@@ -225,10 +233,25 @@ export function SettingsDialog() {
               <CloseIcon className="h-4 w-4" />
             </Dialog.Close>
           </div>
+          <div role="tablist" className="mt-3 flex gap-1 border-b border-border">
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                onClick={() => openSettings(item.id)}
+                className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${tab === item.id ? "border-accent font-medium text-ink-900" : "border-transparent text-muted hover:text-ink-800"}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
           {/* Mounted per open so the form always starts from the saved settings. */}
-          {open && settings && (
+          {open && tab === "connection" && settings && (
             <SettingsForm settings={settings} onClose={() => setSettingsOpen(false)} />
           )}
+          {open && tab === "providers" && <ProvidersPanel />}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

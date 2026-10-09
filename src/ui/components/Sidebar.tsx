@@ -4,7 +4,15 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { modelLabel, relativeTime } from "../lib/format";
 import { useAppStore } from "../store";
 import type { ConnectionState, ConversationSummary } from "../types";
-import { CheckIcon, ChevronDownIcon, MoreIcon, PlusIcon, SettingsIcon, Spinner } from "./icons";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  MemoryIcon,
+  MoreIcon,
+  PlusIcon,
+  SettingsIcon,
+  Spinner,
+} from "./icons";
 
 const isMac = window.cowork.platform === "darwin";
 
@@ -77,7 +85,9 @@ function ConversationItem({
   onRename: (conversation: ConversationSummary) => void;
   onResume: (conversation: ConversationSummary) => void;
 }) {
-  const active = useAppStore((state) => state.activeId === conversation.id);
+  const active = useAppStore(
+    (state) => state.view === "chat" && state.activeId === conversation.id,
+  );
   const running = useAppStore((state) => state.chats[conversation.id]?.running ?? false);
   const waiting = useAppStore((state) => (state.chats[conversation.id]?.approvals.length ?? 0) > 0);
   const openChat = useAppStore((state) => state.openChat);
@@ -251,7 +261,9 @@ export function Sidebar() {
   const agentId = useAppStore((state) => state.agentId);
   const connection = useAppStore((state) => state.connection);
   const openChat = useAppStore((state) => state.openChat);
-  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen);
+  const openMemory = useAppStore((state) => state.openMemory);
+  const openSettings = useAppStore((state) => state.openSettings);
+  const memoryOpen = useAppStore((state) => state.view === "memory");
   const [renaming, setRenaming] = useState<ConversationSummary | null>(null);
   const [resuming, setResuming] = useState<ConversationSummary | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -277,6 +289,16 @@ export function Sidebar() {
           New chat
           <kbd className="ml-auto font-sans text-xs text-muted-light">{isMac ? "⌘N" : "Ctrl+N"}</kbd>
         </button>
+        <button
+          type="button"
+          disabled={!agentId}
+          onClick={openMemory}
+          aria-pressed={memoryOpen}
+          className={`mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${memoryOpen ? "bg-ink-900/8 text-ink-900" : "text-ink-800 hover:bg-ink-900/5"}`}
+        >
+          <MemoryIcon className="h-4 w-4" />
+          Memory
+        </button>
       </div>
 
       <nav className="mt-3 min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
@@ -300,7 +322,7 @@ export function Sidebar() {
         <ConnectionBadge connection={connection} />
         <button
           type="button"
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => openSettings("connection")}
           aria-label="Settings"
           title="Settings"
           className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-ink-900/8 hover:text-ink-800 transition-colors"

@@ -89,15 +89,30 @@ export const MoreIcon = (props: IconProps) => (
   </Icon>
 );
 
-export const ShieldIcon = (props: IconProps) => (
+export const MemoryIcon = (props: IconProps) => (
   <Icon {...props}>
-    <path d="M12 3 5 6v5c0 4.5 2.9 8.3 7 10 4.1-1.7 7-5.5 7-10V6Z" />
+    <path d="M5 4h10l4 4v12H5Z" />
+    <path d="M15 4v4h4M9 13h6M9 17h4" />
   </Icon>
 );
 
-export const SparkIcon = (props: IconProps) => (
+export const HistoryIcon = (props: IconProps) => (
   <Icon {...props}>
-    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" />
+    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+    <path d="M3 3v5h5M12 7v5l3 2" />
+  </Icon>
+);
+
+export const RefreshIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+    <path d="M21 3v5h-5" />
+  </Icon>
+);
+
+export const ShieldIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M12 3 5 6v5c0 4.5 2.9 8.3 7 10 4.1-1.7 7-5.5 7-10V6Z" />
   </Icon>
 );
 

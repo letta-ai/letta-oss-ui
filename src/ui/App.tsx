@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { ChatView } from "./components/ChatView";
+import { MemoryView } from "./components/MemoryView";
 import { NewAgentDialog } from "./components/NewAgentDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
@@ -38,6 +39,10 @@ function Notice() {
 }
 
 export default function App() {
+  const view = useAppStore((state) => state.view);
+  // Keyed by agent so switching agents starts the memory view fresh.
+  const agentId = useAppStore((state) => state.agentId);
+
   useEffect(() => {
     const { handleEvent, bootstrap, setNotice } = useAppStore.getState();
     // Subscribe before the first fetch so no state change is missed.
@@ -51,7 +56,7 @@ export default function App() {
   return (
     <div className="flex h-screen overflow-hidden bg-surface text-ink-900">
       <Sidebar />
-      <ChatView />
+      {view === "memory" ? <MemoryView key={agentId} /> : <ChatView />}
       <SettingsDialog />
       <NewAgentDialog />
       <Notice />

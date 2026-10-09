@@ -42,7 +42,13 @@ export type SettingsUpdate = {
 
 export type ConnectionState =
   | { status: "connecting"; backend: BackendKind }
-  | { status: "ready"; backend: BackendKind; detail: string }
+  | {
+      status: "ready";
+      backend: BackendKind;
+      detail: string;
+      /** True when the server keeps its own model provider keys (the local backend). */
+      providers: boolean;
+    }
   | { status: "error"; backend: BackendKind; error: string };
 
 export type AgentSummary = {
@@ -56,6 +62,58 @@ export type ModelOption = {
   id: string;
   handle: string;
   label: string;
+};
+
+export type ProviderField = {
+  key: string;
+  label: string;
+  placeholder: string | null;
+  secret: boolean;
+  required: boolean;
+};
+
+export type ProviderAuthMethod = {
+  id: string;
+  label: string;
+  description: string;
+  fields: ProviderField[];
+};
+
+export type ProviderSummary = {
+  id: string;
+  name: string;
+  description: string;
+  /** Subscription sign-in. These are connected from the Letta CLI, not here. */
+  oauth: boolean;
+  fields: ProviderField[];
+  /** Set instead of `fields` when a provider offers more than one way to authenticate. */
+  authMethods: ProviderAuthMethod[];
+  connections: Array<{ name: string; authType: "api" | "oauth" | null; baseUrl: string | null }>;
+};
+
+export type MemoryFile = {
+  /** Path relative to the agent's memory folder. */
+  path: string;
+  /** System files are always in the agent's context. */
+  system: boolean;
+  description: string | null;
+  /** The body, without the file's header. Use readMemoryFile for the whole file. */
+  content: string;
+  size: number;
+  kind: "markdown" | "image";
+};
+
+export type MemoryOverview = {
+  /** False for agents that do not use file-based memory. */
+  enabled: boolean;
+  files: MemoryFile[];
+};
+
+export type MemoryCommit = {
+  sha: string;
+  message: string;
+  timestamp: number;
+  author: string | null;
 };
 
 export type ConversationSummary = {
@@ -139,7 +197,20 @@ export type AppRequests = {
   reconnect(): ConnectionState;
   listAgents(): AgentSummary[];
   createAgent(input: { name: string; model?: string }): AgentSummary;
-  listModels(): ModelOption[];
+  listModels(refresh?: boolean): ModelOption[];
+  listProviders(): ProviderSummary[];
+  connectProvider(input: {
+    providerId: string;
+    authMethodId?: string;
+    fields: Record<string, string>;
+  }): ProviderSummary[];
+  disconnectProvider(input: { providerId: string; providerName?: string }): ProviderSummary[];
+  listMemory(agentId: string): MemoryOverview;
+  readMemoryFile(agentId: string, path: string): string;
+  writeMemoryFile(agentId: string, path: string, content: string): void;
+  deleteMemoryFile(agentId: string, path: string): void;
+  listMemoryHistory(agentId: string, path: string): MemoryCommit[];
+  readMemoryFileAt(agentId: string, path: string, sha: string): string;
   listConversations(agentId: string): ConversationSummary[];
   loadHistory(conversationId: string, limit: number): HistoryResult;
   renameConversation(conversationId: string, title: string): ConversationSummary;
