@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Type-check and lint
+      - name: Type-check, lint, and test
         run: bun run check
 
       - name: Build

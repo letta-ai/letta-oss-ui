@@ -1,10 +1,11 @@
 {
-	"name": "letta-cowork",
-	"productName": "Letta Cowork",
+	"name": "letta-oss-ui",
+	"productName": "OSS-UI",
 	"private": true,
 	"version": "0.2.0",
 	"description": "Desktop app for working with Letta agents",
 	"author": "Letta",
+	"license": "Apache-2.0",
 	"type": "module",
 	"main": "dist-electron/main.js",
 	"engines": {
@@ -15,9 +16,10 @@
 		"dev:react": "vite",
 		"dev:electron": "bun run transpile:electron && cross-env NODE_ENV=development electron .",
 		"build": "tsc -b && vite build",
-		"typecheck": "tsc -b && tsc --project src/electron/tsconfig.json --noEmit",
+		"typecheck": "tsc -b && tsc --project src/electron/tsconfig.json --noEmit && tsc --project tests/tsconfig.json",
 		"lint": "eslint .",
-		"check": "bun run typecheck && bun run lint",
+		"test": "vitest run",
+		"check": "bun run typecheck && bun run lint && bun run test",
 		"preview": "vite preview",
 		"transpile:electron": "tsc --project src/electron/tsconfig.json",
 		"dist:mac-arm64": "bun run transpile:electron && bun run build && electron-builder --mac --arm64",
@@ -56,6 +58,7 @@
 		"typescript": "~6.0.3",
 		"typescript-eslint": "^8.71.1",
 		"vite": "^8.3.4",
+		"vitest": "^5.0.3",
 		"zustand": "^5.0.10"
 	},
 	"trustedDependencies": [

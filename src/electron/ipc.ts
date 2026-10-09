@@ -4,6 +4,8 @@ import {
   applyPermissionMode,
   archiveConversation,
   createAgent,
+  deleteAgent,
+  getAgent,
   getConnection,
   listAgents,
   listConversations,
@@ -13,6 +15,7 @@ import {
   respondApproval,
   sendMessage,
   stopTurn,
+  updateAgent,
 } from "./libs/runtime.js";
 import {
   deleteMemoryFile,
@@ -35,7 +38,7 @@ type Handlers = {
 
 export function broadcast(event: AppEvent): void {
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send("cowork:event", event);
+    if (!window.isDestroyed()) window.webContents.send("app:event", event);
   }
 }
 
@@ -52,6 +55,9 @@ const handlers: Handlers = {
   reconnect,
   listAgents,
   createAgent,
+  getAgent,
+  updateAgent,
+  deleteAgent,
   listModels,
   listProviders,
   connectProvider,
@@ -80,7 +86,7 @@ const handlers: Handlers = {
 
 export function registerIpc(): void {
   for (const [name, handler] of Object.entries(handlers)) {
-    ipcMain.handle(`cowork:${name}`, async (event, ...args: unknown[]) => {
+    ipcMain.handle(`app:${name}`, async (event, ...args: unknown[]) => {
       // Errors cross the bridge as data so the renderer sees the real message
       // instead of Electron's "Error invoking remote method" wrapper.
       try {

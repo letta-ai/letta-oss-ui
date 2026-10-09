@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AgentSettingsDialog } from "./components/AgentSettingsDialog";
 import { ChatView } from "./components/ChatView";
 import { MemoryView } from "./components/MemoryView";
 import { NewAgentDialog } from "./components/NewAgentDialog";
@@ -46,7 +47,7 @@ export default function App() {
   useEffect(() => {
     const { handleEvent, bootstrap, setNotice } = useAppStore.getState();
     // Subscribe before the first fetch so no state change is missed.
-    const unsubscribe = window.cowork.onEvent(handleEvent);
+    const unsubscribe = window.bridge.onEvent(handleEvent);
     bootstrap().catch((error: unknown) => {
       setNotice(error instanceof Error ? error.message : String(error));
     });
@@ -59,6 +60,7 @@ export default function App() {
       {view === "memory" ? <MemoryView key={agentId} /> : <ChatView />}
       <SettingsDialog />
       <NewAgentDialog />
+      <AgentSettingsDialog />
       <Notice />
     </div>
   );

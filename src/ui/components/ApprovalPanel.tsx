@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toolLabel, toolSummary } from "../lib/format";
+import { relativeToFolder, toolLabel, toolSummary } from "../lib/format";
 import type { ApprovalDecision, ApprovalRequest } from "../types";
 
 type Question = {
@@ -107,19 +107,32 @@ function QuestionForm({
 }
 
 /** The agent wants to run a tool that needs the user's permission. */
+/** The text a file-writing tool is about to put on disk, when it says. */
+function proposedText(input: Record<string, unknown>): string | null {
+  for (const key of ["content", "new_string"]) {
+    const value = input[key];
+    if (typeof value === "string" && value) return value;
+  }
+  return null;
+}
+
 export function ApprovalPanel({
   request,
   queued,
+  cwd,
   onDecide,
 }: {
   request: ApprovalRequest;
   /** Other approvals waiting behind this one. */
   queued: number;
+  /** The chat's working folder, used to shorten paths. */
+  cwd: string;
   onDecide: (decision: ApprovalDecision) => void;
 }) {
   const questions = (request.input as { questions?: Question[] }).questions;
   const isQuestion = request.toolName === "AskUserQuestion" && Array.isArray(questions);
-  const summary = toolSummary(request.input);
+  const summary = relativeToFolder(toolSummary(request.input), cwd);
+  const proposed = proposedText(request.input);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 pb-3">
@@ -138,6 +151,11 @@ export function ApprovalPanel({
             <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-surface-tertiary p-3 font-mono text-xs text-ink-800">
               {summary || JSON.stringify(request.input, null, 2)}
             </pre>
+            {proposed && (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border p-3 font-mono text-xs text-ink-700">
+                {proposed}
+              </pre>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"

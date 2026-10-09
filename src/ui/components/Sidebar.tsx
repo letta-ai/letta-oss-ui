@@ -14,7 +14,7 @@ import {
   Spinner,
 } from "./icons";
 
-const isMac = window.cowork.platform === "darwin";
+const isMac = window.bridge.platform === "darwin";
 
 const menuContent =
   "z-50 min-w-[220px] rounded-xl border border-border bg-surface p-1 shadow-elevated";
@@ -27,6 +27,7 @@ function AgentSwitcher() {
   const models = useAppStore((state) => state.models);
   const selectAgent = useAppStore((state) => state.selectAgent);
   const setNewAgentOpen = useAppStore((state) => state.setNewAgentOpen);
+  const setAgentSettingsOpen = useAppStore((state) => state.setAgentSettingsOpen);
   const current = agents.find((agent) => agent.id === agentId);
 
   return (
@@ -64,6 +65,12 @@ function AgentSwitcher() {
             ))}
           </div>
           {agents.length > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border" />}
+          {current && (
+            <DropdownMenu.Item className={menuItem} onSelect={() => setAgentSettingsOpen(true)}>
+              <SettingsIcon className="h-4 w-4 shrink-0 text-muted" />
+              Agent settings...
+            </DropdownMenu.Item>
+          )}
           <DropdownMenu.Item className={menuItem} onSelect={() => setNewAgentOpen(true)}>
             <PlusIcon className="h-4 w-4 shrink-0 text-muted" />
             New agent...

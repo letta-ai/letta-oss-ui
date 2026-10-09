@@ -1,6 +1,6 @@
 {
-    "appId": "com.letta.cowork",
-    "productName": "Letta Cowork",
+    "appId": "com.letta.oss-ui",
+    "productName": "OSS-UI",
     "files": [
         "dist-electron",
         "dist-react",

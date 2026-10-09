@@ -10,7 +10,9 @@ import {
   type TranscriptRow,
 } from "@letta-ai/letta-agent-sdk";
 import type {
+  AgentDetails,
   AgentSummary,
+  AgentUpdate,
   AppEvent,
   ApprovalDecision,
   ApprovalRequest,
@@ -28,6 +30,7 @@ import {
   getConnectionConfig,
   getConversationCwd,
   getPermissionMode,
+  getSettings,
   rememberCwd,
   setAgentId,
 } from "./settings.js";
@@ -231,11 +234,43 @@ export async function listAgents(): Promise<AgentSummary[]> {
 export async function createAgent(input: { name: string; model?: string }): Promise<AgentSummary> {
   const sdk = await ensureClient();
   const agentId = await sdk.createAgent({
-    name: input.name.trim() || "Cowork",
+    name: input.name.trim() || "My agent",
     ...(input.model ? { model: input.model } : {}),
   });
   setAgentId(agentId);
   return toAgentSummary(await sdk.agents.retrieve(agentId));
+}
+
+export async function getAgent(agentId: string): Promise<AgentDetails> {
+  const sdk = await ensureClient();
+  const agent = await sdk.agents.retrieve(agentId);
+  return { ...toAgentSummary(agent), system: agent.system ?? "" };
+}
+
+export async function updateAgent(agentId: string, update: AgentUpdate): Promise<AgentSummary> {
+  const sdk = await ensureClient();
+  const name = update.name?.trim();
+  return toAgentSummary(
+    await sdk.agents.update(agentId, {
+      ...(name ? { name } : {}),
+      ...(update.description !== undefined ? { description: update.description.trim() } : {}),
+      ...(update.model ? { model: update.model } : {}),
+      ...(update.system !== undefined ? { system: update.system } : {}),
+    }),
+  );
+}
+
+/** Permanently delete an agent, with its memory and conversations. */
+export async function deleteAgent(agentId: string): Promise<void> {
+  const sdk = await ensureClient();
+  for (const conversation of [...conversations.values()]) {
+    if (conversation.agentId !== agentId) continue;
+    await stopTurn(conversation.id);
+    conversations.delete(conversation.id);
+    forgetConversation(conversation.id);
+  }
+  await sdk.agents.delete(agentId);
+  if (getSettings().agentId === agentId) setAgentId(null);
 }
 
 // --- Conversations ----------------------------------------------------------
