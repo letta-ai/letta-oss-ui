@@ -1,6 +1,6 @@
 import type { ModelOption } from "../types";
 
-const isWindows = window.cowork.platform === "win32";
+const isWindows = window.bridge.platform === "win32";
 
 /** Last two segments of a path, enough to recognize a project folder. */
 export function shortPath(path: string): string {
@@ -54,6 +54,22 @@ export function toolSummary(input: Record<string, unknown>): string {
     }
   }
   return "";
+}
+
+/**
+ * Show paths inside the chat's working folder relative to it. Tools report
+ * absolute paths, which push the part that matters out of view.
+ */
+export function relativeToFolder(text: string, folder: string): string {
+  const root = folder.replace(/[\\/]+$/, "");
+  if (!root) return text;
+  const escaped = root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return (
+    text
+      .replace(new RegExp(`${escaped}[\\\\/]`, "g"), "")
+      // The folder itself, but not a sibling whose name starts the same way.
+      .replace(new RegExp(`${escaped}(?=$|[\\s"'])`, "g"), ".")
+  );
 }
 
 /** "exec_command" and "WebFetch" both become readable labels. */

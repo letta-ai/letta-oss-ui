@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { relativeTime } from "../lib/format";
+import { directoryOf, fileName, isIndexFile, withHeader } from "../lib/memory";
 import MDContent from "../render/markdown";
 import { useAppStore } from "../store";
 import type { MemoryCommit, MemoryFile } from "../types";
 import { HistoryIcon, PlusIcon, RefreshIcon, Spinner } from "./icons";
 
-const api = window.cowork;
+const api = window.bridge;
 
 /** What the right-hand pane is doing with the selected file. */
 type Mode =
@@ -25,32 +26,6 @@ type Mode =
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** Index files list what a folder holds. They are the one file type without a header. */
-function isIndexFile(path: string): boolean {
-  return /(^|\/)MEMORY\.md$/.test(path);
-}
-
-/**
- * Letta requires every memory file except an index to start with a header
- * naming and describing it. The new-file form writes that header for the user.
- */
-function withHeader(path: string, description: string, body: string): string {
-  if (isIndexFile(path) || body.startsWith("---")) return body;
-  const name = fileName(path).replace(/\.[^.]+$/, "");
-  // The runtime reads these as plain single-line values, so they are not quoted.
-  const summary = description.replace(/\s+/g, " ").trim();
-  return `---\nname: ${name}\ndescription: ${summary}\n---\n\n${body}`;
-}
-
-function directoryOf(path: string): string {
-  const slash = path.lastIndexOf("/");
-  return slash < 0 ? "" : path.slice(0, slash);
-}
-
-function fileName(path: string): string {
-  return path.slice(path.lastIndexOf("/") + 1);
 }
 
 function FileList({

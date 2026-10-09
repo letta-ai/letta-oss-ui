@@ -98,7 +98,7 @@ export async function writeMemoryFile(agentId: string, rawPath: string, content:
       agent_id: agentId,
       path,
       content,
-      commit_message: `Edit ${path} in Letta Cowork`,
+      commit_message: `Edit ${path} in OSS-UI`,
     });
   } catch (error) {
     // A rejected commit leaves the change in the working tree, where it would
@@ -118,7 +118,7 @@ export async function deleteMemoryFile(agentId: string, path: string): Promise<v
     await request("delete_memory_file", {
       agent_id: agentId,
       path,
-      commit_message: `Delete ${path} in Letta Cowork`,
+      commit_message: `Delete ${path} in OSS-UI`,
     });
   } catch (error) {
     // A file that was never committed is removed from disk, but then there is

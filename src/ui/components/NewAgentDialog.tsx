@@ -38,7 +38,7 @@ function NewAgentForm({ onClose }: { onClose: () => void }) {
           autoFocus
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Cowork"
+          placeholder="My agent"
           className="field"
         />
       </label>

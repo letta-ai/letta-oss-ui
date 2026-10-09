@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { EMPTY_CHAT, useAppStore } from "../store";
+import { EMPTY_CHAT, NEW_CHAT, selectCwd, useAppStore } from "../store";
 import type { ChatRow } from "../types";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { Composer } from "./Composer";
@@ -113,6 +113,7 @@ export function ChatView() {
   const ready = useAppStore(
     (state) => state.connection?.status === "ready" && state.agentId !== null,
   );
+  const cwd = useAppStore((state) => selectCwd(state, activeId ?? NEW_CHAT));
   const loadHistory = useAppStore((state) => state.loadHistory);
   const respondApproval = useAppStore((state) => state.respondApproval);
 
@@ -219,6 +220,7 @@ export function ChatView() {
               <TranscriptRow
                 key={row.key}
                 row={row}
+                cwd={cwd}
                 running={running}
                 active={running && index === rows.length - 1}
               />
@@ -258,6 +260,7 @@ export function ChatView() {
         <ApprovalPanel
           request={approval}
           queued={chat.approvals.length - 1}
+          cwd={cwd}
           onDecide={(decision) => respondApproval(approval.requestId, decision)}
         />
       )}

@@ -8,6 +8,9 @@ const METHODS = [
   "reconnect",
   "listAgents",
   "createAgent",
+  "getAgent",
+  "updateAgent",
+  "deleteAgent",
   "listModels",
   "listProviders",
   "connectProvider",
@@ -39,7 +42,7 @@ const requests = Object.fromEntries(
   METHODS.map((method) => [
     method,
     async (...args: unknown[]) => {
-      const reply = (await ipcRenderer.invoke(`cowork:${method}`, ...args)) as Reply;
+      const reply = (await ipcRenderer.invoke(`app:${method}`, ...args)) as Reply;
       if (!reply.ok) throw new Error(reply.error);
       return reply.value;
     },
@@ -50,12 +53,12 @@ const bridge = {
   ...requests,
   onEvent: (listener: (event: AppEvent) => void) => {
     const handler = (_: IpcRendererEvent, event: AppEvent) => listener(event);
-    ipcRenderer.on("cowork:event", handler);
+    ipcRenderer.on("app:event", handler);
     return () => {
-      ipcRenderer.off("cowork:event", handler);
+      ipcRenderer.off("app:event", handler);
     };
   },
   platform: process.platform,
 } as AppBridge;
 
-contextBridge.exposeInMainWorld("cowork", bridge);
+contextBridge.exposeInMainWorld("bridge", bridge);

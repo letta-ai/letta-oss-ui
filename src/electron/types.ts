@@ -58,6 +58,20 @@ export type AgentSummary = {
   model: string | null;
 };
 
+export type AgentDetails = AgentSummary & {
+  /** The agent's full system prompt. */
+  system: string;
+};
+
+/** Fields left out are not changed. */
+export type AgentUpdate = {
+  name?: string;
+  description?: string;
+  /** Default model for new chats. */
+  model?: string;
+  system?: string;
+};
+
 export type ModelOption = {
   id: string;
   handle: string;
@@ -197,6 +211,9 @@ export type AppRequests = {
   reconnect(): ConnectionState;
   listAgents(): AgentSummary[];
   createAgent(input: { name: string; model?: string }): AgentSummary;
+  getAgent(agentId: string): AgentDetails;
+  updateAgent(agentId: string, update: AgentUpdate): AgentSummary;
+  deleteAgent(agentId: string): void;
   listModels(refresh?: boolean): ModelOption[];
   listProviders(): ProviderSummary[];
   connectProvider(input: {

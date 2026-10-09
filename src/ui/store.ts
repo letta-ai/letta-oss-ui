@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { mergeHistory, optimisticUserRow, rowIdentity, upsertRows } from "./lib/rows";
 import type {
   AgentSummary,
+  AgentUpdate,
   AppEvent,
   AppSettings,
   ApprovalDecision,
@@ -16,7 +17,7 @@ import type {
   SettingsUpdate,
 } from "./types";
 
-const api = window.cowork;
+const api = window.bridge;
 
 /** Key for the chat that has not been sent yet. */
 export const NEW_CHAT = "new";
@@ -84,12 +85,15 @@ type AppState = {
   settingsOpen: boolean;
   settingsTab: SettingsTab;
   newAgentOpen: boolean;
+  agentSettingsOpen: boolean;
 
   bootstrap: () => Promise<void>;
   handleEvent: (event: AppEvent) => void;
   refreshAgents: () => Promise<void>;
   selectAgent: (agentId: string) => Promise<void>;
   createAgent: (input: { name: string; model?: string }) => Promise<void>;
+  updateAgent: (update: AgentUpdate) => Promise<AgentSummary>;
+  deleteAgent: () => Promise<void>;
   openChat: (conversationId: string | null) => void;
   loadHistory: (conversationId: string, limit?: number) => Promise<void>;
   send: (text: string) => Promise<void>;
@@ -118,6 +122,7 @@ type AppState = {
   setNotice: (notice: string | null) => void;
   setSettingsOpen: (open: boolean) => void;
   setNewAgentOpen: (open: boolean) => void;
+  setAgentSettingsOpen: (open: boolean) => void;
 };
 
 function errorMessage(error: unknown): string {
@@ -168,6 +173,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   settingsOpen: false,
   settingsTab: "connection",
   newAgentOpen: false,
+  agentSettingsOpen: false,
 
   bootstrap: async () => {
     const [settings, connection] = await Promise.all([api.getSettings(), api.getConnection()]);
@@ -274,7 +280,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       const agentId =
         agents.find((agent) => agent.id === settings.agentId)?.id ?? agents[0]?.id ?? null;
       if (agentId) await get().selectAgent(agentId);
-      else set({ agentId: null, conversations: [], conversationsLoaded: true });
+      else {
+        set({
+          agentId: null,
+          conversations: [],
+          conversationsLoaded: true,
+          activeId: null,
+          view: "chat",
+          memory: null,
+        });
+      }
     } catch (error) {
       set({ agentsLoaded: true, notice: errorMessage(error) });
     }
@@ -308,6 +323,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     const agent = await api.createAgent(input);
     set((state) => ({ agents: [agent, ...state.agents.filter((item) => item.id !== agent.id)] }));
     await get().selectAgent(agent.id);
+  },
+
+  // Update and delete reject on failure so the dialog can show the reason.
+  updateAgent: async (update) => {
+    const { agentId } = get();
+    if (!agentId) throw new Error("No agent is selected.");
+    const agent = await api.updateAgent(agentId, update);
+    set((state) => ({
+      agents: state.agents.map((item) => (item.id === agent.id ? agent : item)),
+    }));
+    return agent;
+  },
+
+  deleteAgent: async () => {
+    const { agentId } = get();
+    if (!agentId) return;
+    await api.deleteAgent(agentId);
+    set({ agentSettingsOpen: false });
+    // Picks another agent, or shows the "create your first agent" screen.
+    await get().refreshAgents();
   },
 
   openChat: (conversationId) => {
@@ -566,6 +601,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setNotice: (notice) => set({ notice }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setNewAgentOpen: (newAgentOpen) => set({ newAgentOpen }),
+  setAgentSettingsOpen: (agentSettingsOpen) => set({ agentSettingsOpen }),
 }));
 
 // --- Selectors --------------------------------------------------------------

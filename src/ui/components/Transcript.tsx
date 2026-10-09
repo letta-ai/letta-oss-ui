@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { toolLabel, toolSummary } from "../lib/format";
+import { relativeToFolder, toolLabel, toolSummary } from "../lib/format";
 import MDContent from "../render/markdown";
 import type { ChatRow, ChatTextRow, ChatToolRow } from "../types";
 import { CheckIcon, ChevronRightIcon, CloseIcon, Spinner } from "./icons";
@@ -56,9 +56,9 @@ function ToolStatus({ row, running }: { row: ChatToolRow; running: boolean }) {
   );
 }
 
-function ToolCall({ row, running }: { row: ChatToolRow; running: boolean }) {
+function ToolCall({ row, running, cwd }: { row: ChatToolRow; running: boolean; cwd: string }) {
   const [open, setOpen] = useState(false);
-  const summary = toolSummary(row.toolInput);
+  const summary = relativeToFolder(toolSummary(row.toolInput), cwd);
   const hasInput = Object.keys(row.toolInput).length > 0;
 
   return (
@@ -104,10 +104,13 @@ export const TranscriptRow = memo(function TranscriptRow({
   row,
   active,
   running,
+  cwd,
 }: {
   row: ChatRow;
   active: boolean;
   running: boolean;
+  /** The chat's working folder, used to shorten the paths tools report. */
+  cwd: string;
 }) {
   switch (row.kind) {
     case "user":
@@ -117,6 +120,6 @@ export const TranscriptRow = memo(function TranscriptRow({
     case "reasoning":
       return <Reasoning row={row} active={active} />;
     case "tool_call":
-      return <ToolCall row={row} running={running} />;
+      return <ToolCall row={row} running={running} cwd={cwd} />;
   }
 });
