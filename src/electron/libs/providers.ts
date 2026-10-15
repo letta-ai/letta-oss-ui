@@ -121,7 +121,37 @@ export async function disconnectProvider(input: {
 export async function listModels(refresh = false): Promise<ModelOption[]> {
   const reply = await request<ModelsReply>("list_models", { force: refresh });
   const available = reply.available_handles ? new Set(reply.available_handles) : null;
-  return reply.entries
+  const models = reply.entries
     .filter((entry) => !available || available.has(entry.handle))
     .map((entry) => ({ id: entry.id, handle: entry.handle, label: entry.label || entry.handle }));
+  return await configuredFirst(models);
+}
+
+/**
+ * Bundled catalogs can list hundreds of models for providers the user never
+ * set up (ambient credentials make them "available"), while a connected
+ * provider's models land at the tail. Sorting connected providers first keeps
+ * the models the user actually configured inside the picker's visible window.
+ */
+async function configuredFirst(models: ModelOption[]): Promise<ModelOption[]> {
+  const configured = await configuredProviderNames();
+  if (configured.size === 0) return models;
+  const from = (model: ModelOption) => configured.has(model.handle.split("/")[0] ?? "");
+  return [...models.filter(from), ...models.filter((model) => !from(model))];
+}
+
+async function configuredProviderNames(): Promise<Set<string>> {
+  try {
+    const reply = await request<ProvidersReply>("list_connect_providers", { target: "local" });
+    const names = new Set<string>();
+    for (const provider of reply.providers ?? []) {
+      for (const connection of provider.connected_providers ?? []) {
+        if (connection.is_connected) names.add(connection.provider_name ?? provider.provider_name);
+      }
+    }
+    return names;
+  } catch {
+    // Without the provider list (e.g. a remote backend), keep the runtime's order.
+    return new Set();
+  }
 }

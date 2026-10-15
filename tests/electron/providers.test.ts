@@ -115,4 +115,35 @@ describe("listModels", () => {
     expect(await providers.listModels(true)).toHaveLength(2);
     expect(request).toHaveBeenCalledWith("list_models", { force: true });
   });
+
+  it("lists connected providers' models before catalog entries", async () => {
+    request.mockImplementation((...args: unknown[]) => {
+      const body = (args[1] ?? {}) as Record<string, unknown>;
+      if (body.target === "local") {
+        return Promise.resolve({
+          providers: [
+            {
+              id: "openai-compatible",
+              display_name: "OpenAI compatible",
+              description: "",
+              provider_name: "openai-compatible",
+              connected_providers: [{ is_connected: true, provider_name: "openai-compatible" }],
+            },
+          ],
+        });
+      }
+      return Promise.resolve({
+        entries: [
+          { id: "b1", handle: "amazon-bedrock/b1", label: "B1" },
+          { id: "g1", handle: "openai-compatible/glm", label: "glm" },
+        ],
+        available_handles: null,
+      });
+    });
+    const models = await providers.listModels();
+    expect(models.map((model) => model.handle)).toEqual([
+      "openai-compatible/glm",
+      "amazon-bedrock/b1",
+    ]);
+  });
 });
