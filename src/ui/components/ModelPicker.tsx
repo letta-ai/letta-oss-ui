@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { modelLabel } from "../lib/format";
+import { useAppStore } from "../store";
 import type { ModelOption } from "../types";
 import { CheckIcon, ChevronDownIcon } from "./icons";
 
@@ -25,16 +26,21 @@ export function ModelPicker({
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const refreshModels = useAppStore((state) => state.refreshModels);
 
   useEffect(() => {
     if (!open) return;
+    // The list fetched at connect time can be stale: a BYOK provider may have
+    // come up since. Force past the backend's availability cache so the menu
+    // is current whenever it opens; the old list shows until the refresh lands.
+    void refreshModels(true);
     inputRef.current?.focus();
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
+  }, [open, refreshModels]);
 
   const results = useMemo(() => {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
