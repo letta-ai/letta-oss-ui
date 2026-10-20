@@ -90,6 +90,7 @@ type AppState = {
   bootstrap: () => Promise<void>;
   handleEvent: (event: AppEvent) => void;
   refreshAgents: () => Promise<void>;
+  refreshModels: (force?: boolean) => Promise<void>;
   selectAgent: (agentId: string) => Promise<void>;
   createAgent: (input: { name: string; model?: string }) => Promise<void>;
   updateAgent: (update: AgentUpdate) => Promise<AgentSummary>;
@@ -270,10 +271,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const [agents, settings] = await Promise.all([api.listAgents(), api.getSettings()]);
       set({ agents, agentsLoaded: true, settings });
-      void api
-        .listModels()
-        .then((models) => set({ models }))
-        .catch(() => undefined);
+      void get().refreshModels();
       const connection = get().connection;
       if (connection?.status === "ready" && connection.providers) void get().loadProviders();
 
@@ -292,6 +290,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     } catch (error) {
       set({ agentsLoaded: true, notice: errorMessage(error) });
+    }
+  },
+
+  /**
+   * Re-reads the model list. Provider availability changes independently of the
+   * connection — a BYOK server can start long after the app — so the picker
+   * refreshes on open instead of relying on the one fetch at connect time.
+   * `force` bypasses the backend's availability cache (a few seconds of
+   * provider probes), needed when a provider just came back up. Keeps the
+   * previous list on failure; the next open retries.
+   */
+  refreshModels: async (force = false) => {
+    try {
+      set({ models: await api.listModels(force) });
+    } catch {
+      // A stale list beats an empty one.
     }
   },
 

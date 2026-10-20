@@ -5,6 +5,7 @@ import type {
   AppSettings,
   ChatRow,
   ConversationSummary,
+  ModelOption,
 } from "../../src/ui/types";
 
 type Store = typeof import("../../src/ui/store");
@@ -52,7 +53,7 @@ function createBridge() {
     getAgent: vi.fn(),
     updateAgent: vi.fn(),
     deleteAgent: vi.fn(async () => undefined),
-    listModels: vi.fn(async () => []),
+    listModels: vi.fn(async (): Promise<ModelOption[]> => []),
     listProviders: vi.fn(async () => []),
     connectProvider: vi.fn(),
     disconnectProvider: vi.fn(),
@@ -135,6 +136,28 @@ describe("connection", () => {
     });
     await flush();
     expect(bridge.listProviders).toHaveBeenCalledOnce();
+  });
+});
+
+describe("models", () => {
+  beforeEach(connect);
+
+  it("refreshes on demand and keeps the previous list when the backend is down", async () => {
+    const model: ModelOption = { id: "m1", handle: "provider/one", label: "One" };
+    bridge.listModels.mockResolvedValue([model]);
+    await state().refreshModels();
+    expect(state().models).toEqual([model]);
+
+    bridge.listModels.mockRejectedValue(new Error("provider down"));
+    await state().refreshModels();
+    expect(state().models).toEqual([model]);
+  });
+
+  it("passes the force flag through to the backend", async () => {
+    await state().refreshModels(true);
+    expect(bridge.listModels).toHaveBeenCalledWith(true);
+    await state().refreshModels();
+    expect(bridge.listModels).toHaveBeenLastCalledWith(false);
   });
 });
 
