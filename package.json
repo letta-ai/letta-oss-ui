@@ -14,7 +14,8 @@
 	"scripts": {
 		"dev": "concurrently -k --kill-others-on-fail \"bun run dev:react\" \"bun run dev:electron\"",
 		"dev:react": "vite",
-		"dev:electron": "bun run transpile:electron && cross-env NODE_ENV=development electron .",
+		"dev:electron": "bun run bundle:electron && cross-env NODE_ENV=development electron .",
+		"bundle:electron": "bun run transpile:electron && esbuild src/electron/main.ts --bundle --platform=node --format=esm --sourcemap --external:electron --external:@letta-ai/letta-agent-sdk --external:@letta-ai/letta-code --external:'@letta-ai/letta-code/*' --outfile=dist-electron/main.js",
 		"build": "tsc -b && vite build",
 		"typecheck": "tsc -b && tsc --project src/electron/tsconfig.json --noEmit && tsc --project tests/tsconfig.json",
 		"lint": "eslint .",
@@ -22,10 +23,10 @@
 		"check": "bun run typecheck && bun run lint && bun run test",
 		"preview": "vite preview",
 		"transpile:electron": "tsc --project src/electron/tsconfig.json",
-		"dist:mac-arm64": "bun run transpile:electron && bun run build && electron-builder --mac --arm64",
-		"dist:mac-x64": "bun run transpile:electron && bun run build && electron-builder --mac --x64",
-		"dist:win": "bun run transpile:electron && bun run build && electron-builder --win --x64",
-		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux --x64"
+		"dist:mac-arm64": "bun run bundle:electron && bun run build && electron-builder --mac --arm64",
+		"dist:mac-x64": "bun run bundle:electron && bun run build && electron-builder --mac --x64",
+		"dist:win": "bun run bundle:electron && bun run build && electron-builder --win --x64",
+		"dist:linux": "bun run bundle:electron && bun run build && electron-builder --linux --x64"
 	},
 	"dependencies": {
 		"@letta-ai/letta-agent-sdk": "0.8.32",
@@ -44,6 +45,7 @@
 		"cross-env": "^10.1.0",
 		"electron": "^44.7.0",
 		"electron-builder": "^26.15.3",
+		"esbuild": "^0.28.2",
 		"eslint": "^10.12.0",
 		"eslint-plugin-react-hooks": "^7.0.1",
 		"eslint-plugin-react-refresh": "^0.5.7",
