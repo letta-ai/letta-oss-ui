@@ -137,6 +137,18 @@ function createWindow(): void {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
   });
 
+  // Dev-only: surface renderer console + load failures in the main-process
+  // log. Without this, renderer-side crashes (e.g. a CSP-blocked preamble)
+  // are invisible from main and present as an unexplained blank window.
+  if (isDev()) {
+    mainWindow.webContents.on("console-message", (details) => {
+      console.log(`[renderer:${details.level}] ${details.sourceId}:${details.lineNumber} ${details.message}`);
+    });
+    mainWindow.webContents.on("did-fail-load", (_event, code, desc, url) => {
+      console.log(`[renderer:did-fail-load] ${code} ${desc} ${url}`);
+    });
+  }
+
   if (isDev()) void mainWindow.loadURL(DEV_URL);
   else void mainWindow.loadFile(getUIPath());
 }
