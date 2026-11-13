@@ -121,8 +121,13 @@ export async function disconnectProvider(input: {
 export async function listModels(refresh = false): Promise<ModelOption[]> {
   const reply = await request<ModelsReply>("list_models", { force: refresh });
   const available = reply.available_handles ? new Set(reply.available_handles) : null;
+  const seen = new Set<string>();
   const models = reply.entries
-    .filter((entry) => !available || available.has(entry.handle))
+    .filter((entry) => {
+      if ((available && !available.has(entry.handle)) || seen.has(entry.handle)) return false;
+      seen.add(entry.handle);
+      return true;
+    })
     .map((entry) => ({ id: entry.id, handle: entry.handle, label: entry.label || entry.handle }));
   return await configuredFirst(models);
 }
