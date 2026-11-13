@@ -116,6 +116,17 @@ describe("listModels", () => {
     expect(request).toHaveBeenCalledWith("list_models", { force: true });
   });
 
+  it("lists each handle once while keeping different providers' models", async () => {
+    const kimi = { id: "kimi-1", handle: "opencode/kimi-k2.6", label: "Kimi K2.6" };
+    const otherProvider = { ...kimi, id: "kimi-3", handle: "other/kimi-k2.6" };
+    request.mockResolvedValue({
+      entries: [kimi, { ...kimi, id: "kimi-2" }, otherProvider, kimi],
+      available_handles: [kimi.handle, otherProvider.handle],
+    });
+
+    expect(await providers.listModels()).toEqual([kimi, otherProvider]);
+  });
+
   it("lists connected providers' models before catalog entries", async () => {
     request.mockImplementation((...args: unknown[]) => {
       const body = (args[1] ?? {}) as Record<string, unknown>;
