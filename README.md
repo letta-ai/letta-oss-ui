@@ -52,7 +52,7 @@ OSS-UI is a desktop app for [stateful agents](https://docs.letta.com/concepts/st
 
 ## Quick start
 
-You need [Bun](https://bun.sh/).
+You need [Bun](https://bun.sh/) and a supported Node.js version: `^22.23.4`, `^24.22.1`, or `^26.12.1`.
 
 ```bash
 git clone https://github.com/letta-ai/letta-oss-ui.git
@@ -152,10 +152,11 @@ Tests live in `tests/` and run with [Vitest](https://vitest.dev/). They cover th
 
 ### Upgrading the SDK
 
-`@letta-ai/letta-agent-sdk` and `@letta-ai/letta-code` depend on each other at exact versions. `package.json` pins both in `dependencies` and in `overrides` so that one copy of each is installed. When you upgrade the SDK, change both packages in both places. This command shows which `@letta-ai/letta-code` version an SDK release needs:
+`package.json` pins `@letta-ai/letta-agent-sdk` and `@letta-ai/letta-code` in both `dependencies` and `overrides` so that one copy of each is installed. When you upgrade the SDK, change both packages in both places. Check the SDK's required runtime range and the runtime's supported Node.js versions before upgrading:
 
 ```bash
-npm view @letta-ai/letta-agent-sdk@<version> dependencies
+npm view @letta-ai/letta-agent-sdk@<version> peerDependencies
+npm view @letta-ai/letta-code@<version> engines
 ```
 
 ## License
