@@ -9,7 +9,7 @@
 	"type": "module",
 	"main": "dist-electron/main.js",
 	"engines": {
-		"node": ">=22.19.0"
+		"node": "^22.23.4 || ^24.22.1 || ^26.12.1"
 	},
 	"scripts": {
 		"dev": "concurrently -k --kill-others-on-fail \"bun run dev:react\" \"bun run dev:electron\"",
@@ -28,8 +28,8 @@
 		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux --x64"
 	},
 	"dependencies": {
-		"@letta-ai/letta-agent-sdk": "0.8.32",
-		"@letta-ai/letta-code": "0.34.6"
+		"@letta-ai/letta-agent-sdk": "0.8.89",
+		"@letta-ai/letta-code": "0.34.59"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -66,7 +66,7 @@
 		"electron"
 	],
 	"overrides": {
-		"@letta-ai/letta-agent-sdk": "0.8.32",
-		"@letta-ai/letta-code": "0.34.6"
+		"@letta-ai/letta-agent-sdk": "0.8.89",
+		"@letta-ai/letta-code": "0.34.59"
 	}
 }
